@@ -10959,6 +10959,8 @@ const main = async () => {
       pull_number,
     });
 
+    const reviewer = reviews[reviews.length - 1].user.login;
+
     const responseCommitsStatuses = reviews.reduce((acc, { user, state }) => {
       if (acc[user.login]) {
         acc[user.login].push(state);
@@ -10981,6 +10983,7 @@ const main = async () => {
       data: {
         github: pull_request_info.user.login,
         isApproved,
+        reviewer,
       },
     });
   } catch (error) {
