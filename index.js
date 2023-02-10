@@ -48,6 +48,7 @@ const main = async () => {
       data: {
         github: pull_request_info.user.login,
         isApproved,
+        pullNumber: pull_number
       },
     });
   } catch (error) {
