@@ -9,7 +9,9 @@ const main = async () => {
     const repo = core.getInput('repo', { required: true });
     const pull_number = core.getInput('pull_number', { required: true });
     const token = core.getInput('token', { required: true });
-    const base_url = core.getInput('host', { required: false }) || 'https://training.cleverland.by';
+    const base_url =
+      core.getInput('host', { required: false }) ||
+      'https://training.cleverland.by';
     const url = `${base_url}/pull-request/reviewed`;
 
     const octokit = new github.getOctokit(token);
@@ -27,10 +29,12 @@ const main = async () => {
     });
 
     const responseCommitsStatuses = reviews.reduce((acc, { user, state }) => {
-      if (acc[user.login]) {
-        acc[user.login].push(state);
-      } else {
-        acc[user.login] = [state];
+      if (user.login !== repo) {
+        if (acc[user.login]) {
+          acc[user.login].push(state);
+        } else {
+          acc[user.login] = [state];
+        }
       }
       return acc;
     }, {});
@@ -48,7 +52,7 @@ const main = async () => {
       data: {
         github: pull_request_info.user.login,
         isApproved,
-        pullNumber: pull_number
+        pullNumber: pull_number,
       },
     });
   } catch (error) {
