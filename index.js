@@ -13,6 +13,7 @@ const main = async () => {
     const token = core.getInput('token', { required: true });
     const base_url = core.getInput('host', { required: false }) || API_URL;
     const url = `${base_url}/pull-request/reviewed`;
+    const required_number_of_approvals = 2;
 
     const octokit = new github.getOctokit(token);
 
@@ -45,7 +46,7 @@ const main = async () => {
           (item.includes('CHANGES_REQUESTED') && item[item.length - 1] === 'APPROVED') ||
           (!item.includes('CHANGES_REQUESTED') && item.includes('APPROVED'))
       )
-      .includes(false);
+      .includes(false) && Object.values(responseCommitsStatuses).length >= required_number_of_approvals;
 
     await request(`POST ${url}`, {
       data: {
