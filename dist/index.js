@@ -30838,15 +30838,18 @@ const main = async () => {
           (item.includes('CHANGES_REQUESTED') && item[item.length - 1] === 'APPROVED') ||
           (!item.includes('CHANGES_REQUESTED') && item.includes('APPROVED'))
       )
-      .includes(false) && Object.values(responseCommitsStatuses).length >= required_number_of_approvals;
+      .includes(false);
 
-    await request(`POST ${url}`, {
-      data: {
-        github: pull_request_info.user.login,
-        isApproved,
-        pullNumber: pull_number,
-      },
-    });
+    if (Object.values(responseCommitsStatuses).length >= required_number_of_approvals) {
+      await request(`POST ${url}`, {
+        data: {
+          github: pull_request_info.user.login,
+          isApproved,
+          pullNumber: pull_number,
+        },
+      });
+    }
+  
   } catch (error) {
     console.log(error);
     core.setFailed(error.message);
