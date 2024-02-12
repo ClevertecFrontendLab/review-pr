@@ -14,6 +14,8 @@ const main = async () => {
     const base_url = core.getInput('host', { required: false }) || API_URL;
     const url = `${base_url}/pull-request/reviewed`;
     const required_number_of_approvals = 2;
+    const CHANGES_REQUESTED_STATE = 'CHANGES_REQUESTED';
+    const APPROVED_STATE = 'APPROVED';
 
     const octokit = new github.getOctokit(token);
 
@@ -40,15 +42,26 @@ const main = async () => {
       return acc;
     }, {});
 
-    const isApproved = !Object.values(responseCommitsStatuses)
+    const reviewStatuses = Object.values(responseCommitsStatuses);
+
+    const isApproved = !reviewStatuses
       .map(
         (item) =>
-          (item.includes('CHANGES_REQUESTED') && item[item.length - 1] === 'APPROVED') ||
-          (!item.includes('CHANGES_REQUESTED') && item.includes('APPROVED'))
+          (item.includes(CHANGES_REQUESTED_STATE) && item[item.length - 1] === APPROVED_STATE) ||
+          (!item.includes(CHANGES_REQUESTED_STATE) && item.includes(APPROVED_STATE))
       )
       .includes(false);
 
-    if (Object.values(responseCommitsStatuses).length >= required_number_of_approvals) {
+    const shouldPostReviewRequest = () => {
+      const hasRequiredApprovals = reviewStatuses.length >= required_number_of_approvals;
+      const hasApprovedState = reviewStatuses.some(item => item.includes(APPROVED_STATE));
+      const hasChangesRequestedState = reviewStatuses.some(item => item.includes(CHANGES_REQUESTED_STATE));
+      const lastStateIsNotApproved = reviewStatuses[reviewStatuses.length - 1][reviewStatuses[reviewStatuses.length - 1].length - 1] !== APPROVED_STATE;
+      
+      return (hasRequiredApprovals || !isApproved) && ((hasApprovedState && isApproved) || (hasChangesRequestedState && lastStateIsNotApproved));
+    };
+
+    if (shouldPostReviewRequest()) {
       await request(`POST ${url}`, {
         data: {
           github: pull_request_info.user.login,
