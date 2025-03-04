@@ -1,9 +1,12 @@
+// @ts-check
 const core = require('@actions/core');
 const github = require('@actions/github');
 const { request } = require('@octokit/request');
-const fs = require('fs');
 
 const API_URL = 'https://training.clevertec.ru';
+const REQUIRED_NUMBER_OF_APPROVALS = 2;
+const CHANGES_REQUESTED_STATE = 'CHANGES_REQUESTED';
+const APPROVED_STATE = 'APPROVED';
 
 const main = async () => {
   try {
@@ -13,58 +16,51 @@ const main = async () => {
     const token = core.getInput('token', { required: true });
     const base_url = core.getInput('host', { required: false }) || API_URL;
     const url = `${base_url}/pull-request/reviewed`;
-    const required_number_of_approvals = 2;
-    const CHANGES_REQUESTED_STATE = 'CHANGES_REQUESTED';
-    const APPROVED_STATE = 'APPROVED';
 
-    const octokit = new github.getOctokit(token);
+    const octokit = github.getOctokit(token);
 
     const { data: pull_request_info } = await octokit.rest.pulls.get({
       owner,
       repo,
-      pull_number,
+      pull_number: Number(pull_number),
     });
 
     const { data: reviews } = await octokit.rest.pulls.listReviews({
       owner,
       repo,
-      pull_number,
+      pull_number: Number(pull_number),
     });
 
-    const responseCommitsStatuses = reviews.reduce((acc, { user, state }) => {
-      if (user.login !== repo) {
-        if (acc[user.login]) {
-          acc[user.login].push(state);
-        } else {
-          acc[user.login] = [state];
-        }
+    const authorLogin = pull_request_info.user.login
+    const reviewsWithoutAuthor = reviews.filter(({ user }) => user?.login !== authorLogin)
+
+    /** @type {Record<string, string[]>} */
+    const reviewUserHistory = reviewsWithoutAuthor.reduce((acc, { user, state }) => {
+      if (!user) {
+        return acc;
       }
+
+      if (acc[user.login]) {
+        acc[user.login].push(state);
+      } else {
+        acc[user.login] = [state];
+      }
+
       return acc;
     }, {});
 
-    const reviewStatuses = Object.values(responseCommitsStatuses);
+    /** @type {string[][]} */
+    const reviewStatuses = Object.values(reviewUserHistory);
+    const hasEnoughReviews = reviewStatuses.length >= REQUIRED_NUMBER_OF_APPROVALS;
+    const isApproved = hasEnoughReviews && reviewStatuses.every((statusesHistory) => statusesHistory[statusesHistory.length - 1] === APPROVED_STATE);
 
-    const isApproved = !reviewStatuses
-      .map(
-        (item) =>
-          (item.includes(CHANGES_REQUESTED_STATE) && item[item.length - 1] === APPROVED_STATE) ||
-          (!item.includes(CHANGES_REQUESTED_STATE) && item.includes(APPROVED_STATE))
-      )
-      .includes(false);
+    const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
+    const shouldPostReviewRequest = isApproved || latestReview?.state === CHANGES_REQUESTED_STATE
 
-    const shouldPostReviewRequest = () => {
-      const hasRequiredApprovals = reviewStatuses.length >= required_number_of_approvals;
-      const hasApprovedState = reviewStatuses.some(item => item.includes(APPROVED_STATE));
-      const hasChangesRequestedState = reviewStatuses.some(item => item.includes(CHANGES_REQUESTED_STATE));
-      const lastStateIsNotApproved = reviewStatuses[reviewStatuses.length - 1][reviewStatuses[reviewStatuses.length - 1].length - 1] !== APPROVED_STATE;
-      
-      return (hasRequiredApprovals || !isApproved) && ((hasApprovedState && isApproved) || (hasChangesRequestedState && lastStateIsNotApproved));
-    };
-
-    if (shouldPostReviewRequest()) {
+    if (shouldPostReviewRequest) {
       await request(`POST ${url}`, {
         data: {
-          github: pull_request_info.user.login,
+          github: authorLogin,
           isApproved,
           pullNumber: pull_number,
         },
