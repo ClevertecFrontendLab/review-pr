@@ -52,7 +52,16 @@ const main = async () => {
     /** @type {string[][]} */
     const reviewStatuses = Object.values(reviewUserHistory);
     const hasEnoughReviews = reviewStatuses.length >= REQUIRED_NUMBER_OF_APPROVALS;
-    const isApproved = hasEnoughReviews && reviewStatuses.every((statusesHistory) => statusesHistory[statusesHistory.length - 1] === APPROVED_STATE);
+    const isApproved = hasEnoughReviews && reviewStatuses.every((statusesHistory) => {
+      const reversedHistory = [...statusesHistory].reverse()
+      const approvedIndex = reversedHistory.findIndex((status) => status === APPROVED_STATE)
+      
+      if (approvedIndex === -1) {
+        return false
+      }
+
+      return !reversedHistory.slice(0, approvedIndex).includes(CHANGES_REQUESTED_STATE)
+    });
 
     const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
     const shouldPostReviewRequest = isApproved || latestReview?.state === CHANGES_REQUESTED_STATE
