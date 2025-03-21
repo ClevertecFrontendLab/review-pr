@@ -30848,7 +30848,7 @@ const main = async () => {
     reviewStatuses.forEach(([name, mentorHistory]) => {
         let index = mentorHistory.length - 1
 
-        while(index >= 0 && (mentorHistory[index] !== APPROVED_STATE || mentorHistory[index] !== CHANGES_REQUESTED_STATE)) {
+        while(index >= 0 && mentorHistory[index] !== APPROVED_STATE && mentorHistory[index] !== CHANGES_REQUESTED_STATE) {
           index--
         }
 
