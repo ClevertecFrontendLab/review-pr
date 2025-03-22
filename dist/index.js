@@ -30842,7 +30842,7 @@ const main = async () => {
 
     const reviewStatuses = Object.entries(reviewUserHistory);
 
-    /** @type {{name:string, status: string}[]} */
+    /** @type {{mentorGithub: string, status: string}[]} */
     const mentorStatuses = []
 
     reviewStatuses.forEach(([name, mentorHistory]) => {
@@ -30853,10 +30853,10 @@ const main = async () => {
         }
 
         if (index < 0) {
-         return mentorStatuses.push({ name, status: PENDING_STATE })
+         return mentorStatuses.push({ mentorGithub: name, status: PENDING_STATE })
         }
 
-        mentorStatuses.push({ name, status: mentorHistory[index] })
+        mentorStatuses.push({ mentorGithub: name, status: mentorHistory[index] })
     })
 
     const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
@@ -30869,7 +30869,8 @@ const main = async () => {
           github: authorLogin,
           link: pull_request_info.html_url,
           pullNumber: pull_number,
-          reviews: mentorStatuses
+          reviews: mentorStatuses,
+          changesRequested: isLastChangesRequested
         },
       });
     }
