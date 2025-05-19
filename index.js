@@ -4,10 +4,10 @@ const github = require('@actions/github');
 const { request } = require('@octokit/request');
 
 const API_URL = 'https://training.clevertec.ru';
-const REQUIRED_NUMBER_OF_APPROVALS = 2;
 const CHANGES_REQUESTED_STATE = 'CHANGES_REQUESTED';
 const APPROVED_STATE = 'APPROVED';
-const PENDING_STATE = "PENDING"
+const PENDING_STATE = 'PENDING';
+const statusesToCollect = [APPROVED_STATE, CHANGES_REQUESTED_STATE];
 
 const main = async () => {
   try {
@@ -23,7 +23,7 @@ const main = async () => {
     const { data: pull_request_info } = await octokit.rest.pulls.get({
       owner,
       repo,
-      pull_number: Number(pull_number),
+      pull_number: Number(pull_number)
     });
 
     const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
@@ -33,17 +33,24 @@ const main = async () => {
       per_page: 100,
     });
 
-    const authorLogin = pull_request_info.user.login
-    const reviewsWithoutAuthor = reviews.filter(({ user }) => user?.login !== authorLogin)
+    // последний актуальный коммит в ПР участника
+    const { data: commit_info } = await octokit.rest.repos.getCommit({
+      owner,
+      repo,
+      ref: pull_request_info.head.sha
+    });
 
-    /** @type {Record<string, string[]>} */
-    const reviewUserHistory = reviewsWithoutAuthor.reduce((acc, { user, state }) => {
+    const authorLogin = pull_request_info.user.login;
+    const reviewsWithoutAuthor = reviews.filter(({ user }) => user?.login !== authorLogin);
+
+    /** @type {Record<string, { submitted_at?: string, state: string }[]>} */
+    const reviewUserHistory = reviewsWithoutAuthor.reduce((acc, { user, state, submitted_at }) => {
       if (!user) {
         return acc;
       }
 
       acc[user.login] = acc[user.login] ?? [];
-      acc[user.login].push(state);
+      acc[user.login].push({ submitted_at, state });
 
       return acc;
     }, {});
@@ -51,25 +58,37 @@ const main = async () => {
     const reviewStatuses = Object.entries(reviewUserHistory);
 
     /** @type {{mentorGithub: string, status: string}[]} */
-    const mentorStatuses = []
+    const mentorStatuses = [];
 
     reviewStatuses.forEach(([name, mentorHistory]) => {
-        let index = mentorHistory.length - 1
+      let index = mentorHistory.length - 1;
 
-        while(index >= 0 && mentorHistory[index] !== APPROVED_STATE && mentorHistory[index] !== CHANGES_REQUESTED_STATE) {
-          index--
+      // поиск первого статуса ревью с конца истории
+      while (index >= 0 && !statusesToCollect.includes(mentorHistory[index].state)) {
+        index--;
+      }
+
+      if (index < 0) {
+        return mentorStatuses.push({ mentorGithub: name, status: PENDING_STATE });
+      }
+
+      const { state, submitted_at: reviewDate } = mentorHistory[index];
+
+      // проверка устарело ли ревью CHANGES_REQUESTED по сравнению с датой последнего коммита участника
+      if (state === CHANGES_REQUESTED_STATE) {
+        const lastCommitDate = commit_info.commit.committer?.date;
+
+        if (lastCommitDate && reviewDate && new Date(lastCommitDate) > new Date(reviewDate)) {
+          return mentorStatuses.push({ mentorGithub: name, status: PENDING_STATE });
         }
+      }
 
-        if (index < 0) {
-         return mentorStatuses.push({ mentorGithub: name, status: PENDING_STATE })
-        }
+      mentorStatuses.push({ mentorGithub: name, status: state });
+    });
 
-        mentorStatuses.push({ mentorGithub: name, status: mentorHistory[index] })
-    })
-
-    const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
-    const isLastChangesRequested = latestReview?.state === CHANGES_REQUESTED_STATE
-    const isLastApproved = latestReview?.state === APPROVED_STATE
+    const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1];
+    const isLastChangesRequested = latestReview?.state === CHANGES_REQUESTED_STATE;
+    const isLastApproved = latestReview?.state === APPROVED_STATE;
 
     if (isLastApproved || isLastChangesRequested) {
       await request(`POST ${url}`, {
@@ -79,7 +98,7 @@ const main = async () => {
           pullNumber: pull_number,
           reviews: mentorStatuses,
           changesRequested: isLastChangesRequested
-        },
+        }
       });
     }
   } catch (error) {
