@@ -30812,21 +30812,18 @@ const main = async () => {
 
     const octokit = github.getOctokit(token);
 
-    console.log('git token', token);
-
     const { data: pull_request_info } = await octokit.rest.pulls.get({
       owner,
       repo,
       pull_number: Number(pull_number),
     });
 
-    const { data: reviews } = await octokit.rest.pulls.listReviews({
+    const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
       owner,
       repo,
       pull_number: Number(pull_number),
+      per_page: 100,
     });
-
-    console.log('raw reviews',reviews);
 
     const authorLogin = pull_request_info.user.login
     const reviewsWithoutAuthor = reviews.filter(({ user }) => user?.login !== authorLogin)
@@ -30842,8 +30839,6 @@ const main = async () => {
 
       return acc;
     }, {});
-
-    console.log('review by mentors',reviewUserHistory);
 
     const reviewStatuses = Object.entries(reviewUserHistory);
 
@@ -30864,8 +30859,6 @@ const main = async () => {
         mentorStatuses.push({ mentorGithub: name, status: mentorHistory[index] })
     })
 
-    console.log('mentor statuses', mentorStatuses)
-
     const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
     const isLastChangesRequested = latestReview?.state === CHANGES_REQUESTED_STATE
     const isLastApproved = latestReview?.state === APPROVED_STATE
@@ -30881,9 +30874,6 @@ const main = async () => {
         },
       });
     }
-
-
-  
   } catch (error) {
     console.log(error);
     core.setFailed(error.message);
