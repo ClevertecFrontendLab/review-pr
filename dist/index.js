@@ -30812,6 +30812,8 @@ const main = async () => {
 
     const octokit = github.getOctokit(token);
 
+    console.log('git token', token);
+
     const { data: pull_request_info } = await octokit.rest.pulls.get({
       owner,
       repo,
@@ -30823,6 +30825,8 @@ const main = async () => {
       repo,
       pull_number: Number(pull_number),
     });
+
+    console.log('raw reviews',reviews);
 
     const authorLogin = pull_request_info.user.login
     const reviewsWithoutAuthor = reviews.filter(({ user }) => user?.login !== authorLogin)
@@ -30839,6 +30843,7 @@ const main = async () => {
       return acc;
     }, {});
 
+    console.log('review by mentors',reviewUserHistory);
 
     const reviewStatuses = Object.entries(reviewUserHistory);
 
@@ -30858,6 +30863,8 @@ const main = async () => {
 
         mentorStatuses.push({ mentorGithub: name, status: mentorHistory[index] })
     })
+
+    console.log('mentor statuses', mentorStatuses)
 
     const latestReview = reviewsWithoutAuthor[reviewsWithoutAuthor.length - 1]
     const isLastChangesRequested = latestReview?.state === CHANGES_REQUESTED_STATE
